@@ -280,17 +280,16 @@ final class AppModel: ObservableObject {
 
     private func recorderEvent(_ event: MicRecorder.Event) {
         switch event {
-        case let .started(device, format):
-            AppLog.write("микрофон: \(device) (\(format))")
-            micInUse = device
-        case let .switched(from, to, reason):
-            AppLog.write("микрофон: \(from) → \(to) (\(reason))")
-            micInUse = to
-            if from != to {
-                Notifier.show(title: "Микрофон переключён", body: "\(reason). Запись продолжается с «\(to)»")
+        case let .started(device, format, voiceProcessing):
+            AppLog.write("микрофон: \(device) (\(format)\(voiceProcessing ? ", с системной обработкой голоса" : ""))")
+            if let previous = micInUse, previous != device {
+                Notifier.show(title: "Микрофон переключён", body: "Запись продолжается с «\(device)»")
             }
+            micInUse = device
+        case let .recovering(reason):
+            AppLog.write("микрофон: \(reason)")
         case let .silent(device):
-            AppLog.write("микрофон «\(device)» отдаёт тишину, переключиться не на что")
+            AppLog.write("микрофон «\(device)» отдаёт тишину, ни один способ не помог")
             Notifier.show(title: "Микрофон не отдаёт звук",
                           body: "«\(device)» пишет тишину. Проверьте, не выключен ли микрофон, или выберите другой в меню Scribe")
         }

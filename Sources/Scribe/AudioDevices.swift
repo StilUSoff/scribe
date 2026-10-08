@@ -39,17 +39,18 @@ enum AudioDevices {
         inputs().first(where: \.isBuiltIn)
     }
 
-    /// Вызывать block при смене микрофона по умолчанию в системе. Вернёт токен для removeDefaultInputListener.
-    static func addDefaultInputListener(_ block: @escaping () -> Void) -> AudioObjectPropertyListenerBlock {
+    /// Вызывать block при смене микрофона по умолчанию в системе. Очередь — не главная: снятие слушателя ждёт
+    /// завершения уже запущенного вызова, и если тот стоит в очереди главного потока — взаимная блокировка.
+    static func addDefaultInputListener(queue: DispatchQueue, _ block: @escaping () -> Void) -> AudioObjectPropertyListenerBlock {
         var address = Self.address(kAudioHardwarePropertyDefaultInputDevice)
         let listener: AudioObjectPropertyListenerBlock = { _, _ in block() }
-        AudioObjectAddPropertyListenerBlock(system, &address, DispatchQueue.main, listener)
+        AudioObjectAddPropertyListenerBlock(system, &address, queue, listener)
         return listener
     }
 
-    static func removeDefaultInputListener(_ listener: @escaping AudioObjectPropertyListenerBlock) {
+    static func removeDefaultInputListener(_ listener: @escaping AudioObjectPropertyListenerBlock, queue: DispatchQueue) {
         var address = Self.address(kAudioHardwarePropertyDefaultInputDevice)
-        AudioObjectRemovePropertyListenerBlock(system, &address, DispatchQueue.main, listener)
+        AudioObjectRemovePropertyListenerBlock(system, &address, queue, listener)
     }
 
     // MARK: - CoreAudio
