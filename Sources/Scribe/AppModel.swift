@@ -205,9 +205,11 @@ final class AppModel: ObservableObject {
             Task { @MainActor in self?.liveChunk(p) }
         }
         let recorder = MicRecorder()
+        recorder.onEvent = { [weak self] event in self?.recorderEvent(event) }
         do {
-            try recorder.start(writingTo: store.url(base, "caf")) { samples in pipeline.feed(samples) }
+            try recorder.start(writingTo: store.url(base, "caf"), preferredUID: micUID) { samples in pipeline.feed(samples) }
         } catch {
+            AppLog.write("не удалось начать запись: \(error.localizedDescription)")
             Notifier.show(title: "Не удалось начать запись", body: error.localizedDescription)
             return
         }
@@ -252,6 +254,7 @@ final class AppModel: ObservableObject {
         if let activity { ProcessInfo.processInfo.endActivity(activity) }
         activity = nil
         self.recorder = nil
+        micInUse = nil
         self.pipeline = nil
         base = ""
         phase = .ready
@@ -273,6 +276,37 @@ final class AppModel: ObservableObject {
         liveProgress = p
         guard phase == .finishing, liveTotal > 0, !cancelling else { return }
         job = Job(title: "конец записи", fraction: min(p.doneSeconds / liveTotal, 1), remaining: p.remaining(until: liveTotal))
+    }
+
+    private func recorderEvent(_ event: MicRecorder.Event) {
+        switch event {
+        case let .started(device, format):
+            AppLog.write("микрофон: \(device) (\(format))")
+            micInUse = device
+        case let .switched(from, to, reason):
+            AppLog.write("микрофон: \(from) → \(to) (\(reason))")
+            micInUse = to
+            if from != to {
+                Notifier.show(title: "Микрофон переключён", body: "\(reason). Запись продолжается с «\(to)»")
+            }
+        case let .silent(device):
+            AppLog.write("микрофон «\(device)» отдаёт тишину, переключиться не на что")
+            Notifier.show(title: "Микрофон не отдаёт звук",
+                          body: "«\(device)» пишет тишину. Проверьте, не выключен ли микрофон, или выберите другой в меню Scribe")
+        }
+    }
+
+    // MARK: - Микрофон
+
+    /// UID выбранного в меню микрофона; nil — как в системе.
+    @Published private(set) var micUID: String? = UserDefaults.standard.string(forKey: "micUID")
+    /// С какого микрофона идёт запись прямо сейчас.
+    @Published private(set) var micInUse: String?
+
+    func selectMic(_ uid: String?) {
+        micUID = uid
+        UserDefaults.standard.set(uid, forKey: "micUID")
+        AppLog.write("выбран микрофон: \(uid.flatMap { AudioDevices.device(uid: $0)?.name } ?? "как в системе")")
     }
 
     // MARK: - Файлы

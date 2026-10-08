@@ -67,6 +67,11 @@ struct MenuContent: View {
         Button("Словарь терминов… (\(model.glossaryTerms))") { model.openGlossary() }
 
         Divider()
+        Picker("Микрофон", selection: Binding(get: { model.micUID ?? "" }, set: { model.selectMic($0.isEmpty ? nil : $0) })) {
+            Text("Как в системе (сейчас: \(AudioDevices.defaultInput()?.name ?? "—"))").tag("")
+            ForEach(AudioDevices.inputs()) { Text($0.name).tag($0.uid) }
+        }
+        .disabled(isRecording)  // меняется со следующей записи
         Picker("Модель", selection: Binding(get: { model.modelChoice }, set: { model.selectModel($0) })) {
             ForEach(AppModel.ModelChoice.allCases) { Text($0.title).tag($0) }
         }
@@ -116,6 +121,7 @@ struct MenuContent: View {
                                    : "Модель выгружена — загрузится при старте записи (~6 с)")
         case .recording:
             Text("● Идёт запись — \(model.elapsed)")
+            if let mic = model.micInUse { Text("Микрофон: \(mic)") }
         case .finishing:
             if let job = model.job {
                 Text("Расшифровываю: \(job.title)")

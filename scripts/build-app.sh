@@ -9,7 +9,10 @@ export DEVELOPER_DIR="${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Develope
 swift build -c release --product Scribe
 BIN="$(swift build -c release --show-bin-path)"
 
-APP=dist/Scribe.app
+# Бандл собираем вне ~/Documents: если та синхронизируется с iCloud, File Provider навешивает на файлы атрибуты
+# (FinderInfo, fileprovider), и codesign падает с «resource fork, Finder information, or similar detritus».
+STAGE="$HOME/Library/Caches/Scribe-build"
+APP="$STAGE/Scribe.app"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN/Scribe" "$APP/Contents/MacOS/Scribe"
