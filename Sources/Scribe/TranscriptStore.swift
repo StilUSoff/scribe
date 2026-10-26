@@ -50,6 +50,19 @@ struct TranscriptStore {
         return files.filter { $0.pathExtension == "caf" }.sorted { $0.path < $1.path }
     }
 
+    /// Самая свежая готовая расшифровка (пустые — где речь не распознана — пропускаем).
+    func latestTranscript() -> URL? {
+        let keys: [URLResourceKey] = [.contentModificationDateKey, .fileSizeKey]
+        let files = (try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: keys)) ?? []
+        return files
+            .filter { $0.pathExtension == "txt" && !$0.lastPathComponent.hasSuffix(".partial.txt") }
+            .compactMap { url -> (URL, Date)? in
+                guard let values = try? url.resourceValues(forKeys: Set(keys)), (values.fileSize ?? 0) > 0 else { return nil }
+                return (url, values.contentModificationDate ?? .distantPast)
+            }
+            .max { $0.1 < $1.1 }?.0
+    }
+
     /// Сохранить итог: txt, звук в m4a (в ~5 раз меньше), убрать промежуточные файлы.
     func finalize(base: String, text: String) async -> URL {
         let txt = url(base, "txt")

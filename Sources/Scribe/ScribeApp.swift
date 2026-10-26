@@ -63,6 +63,8 @@ struct MenuContent: View {
         }
         Button("Расшифровать файл…") { model.transcribeFile() }
             .disabled(model.phase != .ready)
+        Button("Скопировать последнюю расшифровку") { model.copyLastTranscript() }
+            .disabled(model.lastTranscript == nil)
         Button("Открыть папку с расшифровками") { model.openFolder() }
         Button("Словарь терминов… (\(model.glossaryTerms))") { model.openGlossary() }
 

@@ -16,6 +16,8 @@ final class AppModel: ObservableObject {
     @Published private(set) var phase: Phase = .loadingModel(0)
     @Published private(set) var elapsed = ""
     @Published private(set) var unfinished: [URL] = []
+    /// Последняя готовая расшифровка — для «Скопировать последнюю расшифровку».
+    @Published private(set) var lastTranscript: URL?
     /// Идущая расшифровка (файла или конца записи после «стоп») — для прогресса в меню.
     struct Job: Equatable {
         var title: String
@@ -119,6 +121,20 @@ final class AppModel: ObservableObject {
     func refresh() {
         let current = pipeline == nil ? nil : store.url(base, "caf")
         unfinished = store.unfinished().filter { $0 != current }
+        lastTranscript = store.latestTranscript()
+    }
+
+    /// Положить текст последней расшифровки в буфер обмена.
+    func copyLastTranscript() {
+        refresh()  // файлы могли поменять или удалить вручную
+        guard let url = lastTranscript, let text = try? String(contentsOf: url, encoding: .utf8) else {
+            NSSound.beep()
+            return
+        }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text.trimmingCharacters(in: .whitespacesAndNewlines), forType: .string)
+        AppLog.write("в буфер скопирована расшифровка \(url.lastPathComponent)")
+        Notifier.show(title: "Скопировано в буфер", body: url.lastPathComponent, file: url)
     }
 
     /// Сменить модель; только когда ничего не пишется и не расшифровывается.
