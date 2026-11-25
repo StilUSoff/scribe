@@ -1,7 +1,8 @@
 import AVFoundation
 import Foundation
 
-/// Папка с записями и расшифровками: ~/Documents/Transcripts.
+/// Папка с записями и расшифровками: ~/Transcripts. Не в ~/Documents: та часто синхронизируется с iCloud,
+/// и записи созвонов съедают место в облаке. Старая папка ~/Documents/Transcripts переносится сюда при запуске.
 ///
 /// Звук лежит отдельно, в подпапке audio, чтобы не мешаться с расшифровками.
 /// Во время записи: «audio/<дата>.caf» (звук) и «<дата>.partial.txt» (текст по мере распознавания).
@@ -11,11 +12,46 @@ struct TranscriptStore {
     var audioFolder: URL { folder.appendingPathComponent("audio", isDirectory: true) }
     static let audioExtensions: Set<String> = ["caf", "m4a"]
 
-    init(folder: URL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        .appendingPathComponent("Transcripts", isDirectory: true)) {
+    static let defaultFolder = FileManager.default.homeDirectoryForCurrentUser
+        .appendingPathComponent("Transcripts", isDirectory: true)
+    static let legacyFolder = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        .appendingPathComponent("Transcripts", isDirectory: true)
+
+    init(folder: URL = Self.defaultFolder) {
         self.folder = folder
+        if folder == Self.defaultFolder { Self.migrate(from: Self.legacyFolder, to: folder) }
         try? FileManager.default.createDirectory(at: audioFolder, withIntermediateDirectories: true)
         moveLooseAudio()
+    }
+
+    /// Перенести записи из старой папки: целиком, если новой ещё нет, иначе по файлам (одноимённые не трогаем).
+    private static func migrate(from old: URL, to new: URL) {
+        let fm = FileManager.default
+        guard fm.fileExists(atPath: old.path) else { return }
+        if !fm.fileExists(atPath: new.path) {
+            do {
+                try fm.moveItem(at: old, to: new)
+                AppLog.write("расшифровки перенесены: \(old.path) → \(new.path)")
+                return
+            } catch {
+                AppLog.write("не удалось перенести папку расшифровок целиком: \(error.localizedDescription)")
+            }
+        }
+        for sub in ["", "audio"] {
+            let from = sub.isEmpty ? old : old.appendingPathComponent(sub)
+            let to = sub.isEmpty ? new : new.appendingPathComponent(sub)
+            try? fm.createDirectory(at: to, withIntermediateDirectories: true)
+            for file in (try? fm.contentsOfDirectory(at: from, includingPropertiesForKeys: nil)) ?? [] where !file.hasDirectoryPath {
+                let target = to.appendingPathComponent(file.lastPathComponent)
+                if !fm.fileExists(atPath: target.path) { try? fm.moveItem(at: file, to: target) }
+            }
+        }
+        // Старую папку убираем, только если в ней ничего не осталось (кроме служебного .DS_Store).
+        for dir in [old.appendingPathComponent("audio"), old] {
+            let rest = ((try? fm.contentsOfDirectory(atPath: dir.path)) ?? []).filter { $0 != ".DS_Store" }
+            if rest.isEmpty { try? fm.removeItem(at: dir) }
+        }
+        AppLog.write("расшифровки перенесены по файлам: \(old.path) → \(new.path)")
     }
 
     /// Записи, сохранённые до появления подпапки audio, переносим туда.

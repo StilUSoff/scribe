@@ -6,12 +6,13 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 export DEVELOPER_DIR="${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}"
 
-swift build -c release --product Scribe
-BIN="$(swift build -c release --show-bin-path)"
-
-# Бандл собираем вне ~/Documents: если та синхронизируется с iCloud, File Provider навешивает на файлы атрибуты
-# (FinderInfo, fileprovider), и codesign падает с «resource fork, Finder information, or similar detritus».
+# Сборка и бандл — вне ~/Documents: если та синхронизируется с iCloud, промежуточные файлы сборки (~1 ГБ) уходят
+# в облако, а File Provider навешивает на файлы атрибуты (FinderInfo, fileprovider), и codesign падает
+# с «resource fork, Finder information, or similar detritus».
 STAGE="$HOME/Library/Caches/Scribe-build"
+swift build -c release --product Scribe --scratch-path "$STAGE/.build"
+BIN="$(swift build -c release --scratch-path "$STAGE/.build" --show-bin-path)"
+
 APP="$STAGE/Scribe.app"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
@@ -35,3 +36,4 @@ if pgrep -xq Scribe; then pkill -x Scribe; sleep 1; fi
 rm -rf "$HOME/Applications/Scribe.app"
 cp -R "$APP" "$HOME/Applications/Scribe.app"
 echo "Установлено: $HOME/Applications/Scribe.app"
+open "$HOME/Applications/Scribe.app"
